@@ -17,7 +17,7 @@ def norm_image(image):
 		return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
 
-def get_colors(image, n_colors=10):
+def get_colors(image, n_colors=10, kind='kmeans'):
 	""" from an image return a column where the colors are sorted and sized by rate of occurence
 
 	inspired by: http://mkweb.bcgsc.ca/color-summarizer/?faq
@@ -27,12 +27,16 @@ def get_colors(image, n_colors=10):
 	from scipy.cluster.vq import kmeans, kmeans2, whiten, vq
 	features = im_lab.reshape(-1, 3)
 	whitened = whiten(features)
-	# centroids, distortion = kmeans(whitened, n_colors)
-	centroids, labels = kmeans2(whitened, n_colors, minit='points')
+	
+	if kind == 'kmeans':
+		centroids, distortion = kmeans(whitened, n_colors)
+	elif kind == 'kmeans2':
+		centroids, labels = kmeans2(whitened, n_colors, minit='points')
 
 	# centroids = np.sort(centroids, axis=0)
-	centroids *= np.std(features, axis=0)   # un-whiten
-	# print(centroids.shape, centroids)
+	dewhiten = np.std(features, axis=0)
+	dewhiten[dewhiten == 0] = 1
+	centroids *= dewhiten   # un-whiten
 	codes, dist = vq(features, centroids)   # categorize each observation
 
 	codes, counts = np.unique(codes, return_counts=True)
