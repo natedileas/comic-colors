@@ -21,6 +21,7 @@ from common import cache_local_colors, create_color_col_image
 
 if __name__ == '__main__':
     import os
+    import datetime
 
     outnamef = lambda fn: os.path.join('qc_colors', os.path.basename(fn) + '.pickle')
     cache_local_colors('./qc/*.png', outnamef, kind='kmeans2', n_colors=10)
