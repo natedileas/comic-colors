@@ -2,7 +2,7 @@ import urllib.parse
 import os
 import datetime
 
-from doa_slit import cache_local_colors, create_doa_image, get_images
+from common import cache_local_colors, create_color_col_image, get_images
 
 
 if __name__ == '__main__':
@@ -37,4 +37,4 @@ if __name__ == '__main__':
             return -1
 
     name = f'btf_slit_{datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")}.png'
-    create_doa_image(inglob='./btf_colors/*.pickle', outname=name, labelfun=label, height=500)
+    create_color_col_image(inglob='./btf_colors/*.pickle', outname=name, labelfun=label, height=1000)

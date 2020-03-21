@@ -8,8 +8,6 @@ import cv2
 import pickle
 import datetime
 
-from qc_slit import get_colors, _get_col_from_colors
-
 
 def cache_local_colors(inglob, outnamefunc, **kwargs):
     for i, fn in enumerate(glob.glob(inglob)):
@@ -24,10 +22,7 @@ def cache_local_colors(inglob, outnamefunc, **kwargs):
 
 
 def get_images(url, get_image_url, get_next_link, get_save_loc):
-    # starting at this url
-    #start_url = r'https://www.dumbingofage.com/2010/comic/book-1/01-move-in-day/home/'
-    # start_url = r'https://www.dumbingofage.com/2017/comic/book-7/04-the-do-list/chubby/'
-    # url = start_url
+    """ """
     i = 0
 
     while True:
@@ -39,15 +34,10 @@ def get_images(url, get_image_url, get_next_link, get_save_loc):
 
         soup = BeautifulSoup(req.text, 'html.parser')
 
-        # comicdiv = soup.find(id='comic-1')
-        # imageurl = comicdiv.img['src']
-
         imageurl = get_image_url(soup, url)
 
         # find the comic image and save it
         r = requests.get(imageurl, stream=True)
-
-        # imagename = './doa/' + '_'.join(url.split('/')[-4:]) + os.path.basename(imageurl)
         imagename = get_save_loc(url, imageurl)
         if r.status_code == 200:
             with open(imagename, 'wb') as f:
@@ -62,7 +52,7 @@ def get_images(url, get_image_url, get_next_link, get_save_loc):
         url = nexturl
 
 
-def create_doa_image(inglob='./doa_colors/*.pickle', labelfun=None, height=100, outname='out.png'):
+def create_color_col_image(inglob='./doa_colors/*.pickle', labelfun=None, height=100, outname='out.png'):
 
     columns = []
     labels = []
@@ -74,7 +64,7 @@ def create_doa_image(inglob='./doa_colors/*.pickle', labelfun=None, height=100, 
         except FileNotFoundError:
             continue
         
-        columns.append(_get_col_from_colors(codes, counts, centroids, height=height))
+        columns.append(get_col_from_colors(codes, counts, centroids, height=height))
         labels.append(labelfun(pickle_name))
         
 
@@ -91,12 +81,51 @@ def create_doa_image(inglob='./doa_colors/*.pickle', labelfun=None, height=100, 
     cv2.imwrite(outname, np.hstack(padded_cols))
 
 
-if __name__ == '__main__':
-    # get_images()
-    
-    outname_f = lambda fn: os.path.join('doa_colors_2', os.path.basename(fn) + '.pickle')
-    cache_local_colors('./doa/*', outname_f, kind='kmeans2', n_colors=10)
+def norm_image(image):
+    """ Take a gray, 3-channel, or 4-channel image and return a 3-channel bgr im. """
+    if len(image.shape) == 3:
+        return image[:,:,:3]
+    elif len(image.shape) == 2:
+        return cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
 
-    label = lambda fn: datetime.datetime.strptime(fn.split('_')[-1][:10], '%Y-%m-%d')
-    name = f'doa_slit_{datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")}.png'
-    create_doa_image(inglob='./doa_colors_2/*.pickle', outname=name, labelfun=label, height=1500)
+
+def get_colors(image, n_colors=10, kind='kmeans'):
+    """ from an image return a column where the colors are sorted and sized by rate of occurence
+
+    inspired by: http://mkweb.bcgsc.ca/color-summarizer/?faq
+    """
+    im_lab = cv2.cvtColor(image, cv2.COLOR_BGR2Lab)
+
+    from scipy.cluster.vq import kmeans, kmeans2, whiten, vq
+    features = im_lab.reshape(-1, 3)
+    whitened = whiten(features)
+    
+    if kind == 'kmeans':
+        centroids, distortion = kmeans(whitened, n_colors)
+    elif kind == 'kmeans2':
+        centroids, labels = kmeans2(whitened, n_colors, minit='points')
+
+    # centroids = np.sort(centroids, axis=0)
+    dewhiten = np.std(features, axis=0)
+    dewhiten[dewhiten == 0] = 1
+    centroids *= dewhiten   # un-whiten
+    codes, dist = vq(features, centroids)   # categorize each observation
+
+    codes, counts = np.unique(codes, return_counts=True)
+
+    return codes, counts, centroids
+
+
+def get_col_from_colors(codes, counts, centroids, height=100):
+    s = np.argsort(counts)
+    col = np.vstack([np.repeat(centroids[codes[s][i]][np.newaxis,:], np.round(height * counts[s][i] / counts.sum()), axis=0) for i in range(len(codes))])
+    col = np.sort(col, axis=0)[:, np.newaxis,:]
+    # print(col.shape)
+    # col = np.repeat(centroids[:, np.newaxis, :], 100, axis=0)
+
+    return cv2.cvtColor(col.astype(np.uint8), cv2.COLOR_Lab2BGR)
+
+
+def grab_center_col(image):
+    return image[:,int(image.shape[1] // 2)][np.newaxis, :, :]
+
